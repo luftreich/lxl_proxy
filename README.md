@@ -1,23 +1,22 @@
 ## [Obfuscated SSHD](https://github.com/brl/obfuscated-openssh) Server Deploy
 A global proxy server/client/gateway for Linux, written in `SHELL`.
 
-### PREREQUISITES
+#### PREREQUISITES
 * VPS , SSH supported
 * Local LAN gateway
 
-### Step 1 - Configure VPS
+#### Step 1 - Configure VPS
 * Edit `ssh/etc/gfw.conf`
 * `sh ssh/obfuscated_sshd.sh start`
 
-### STEP 2 - Configure Gateway
+#### STEP 2 - Configure Gateway
 * Copy keyring to GATEWAY, `scp VPS:/$YOUR_DIR/ssh/pkg/*_key.tgz $CUR_DIR/ssh/pkg/*_key.tgz`
 * `sh ssh/lan_proxy_gateway.sh start`
 * `sh ssh/lan_proxy_gateway.sh ssh [key]`
 
-### STEP3 - Configure your own PC network interface
+#### STEP 3 - Configure your own PC network interface
 * Set `gateway` to `$YOUR_GATEWAY_IP`
 * Set 'DNS server to `$YOUR_GATEWAY_IP`
-
  e.g.  
 ```bash
  # FOR LINUX USER
@@ -26,14 +25,14 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
 ```
 Done ! 
 
-### TODO LIST
+#### TODO LIST
 * DNS server in the VPS 
 * Full L2TP Supported
 
 
-### LICENSE
+#### LICENSE
 Copyright (C) 2014 Tony lEE  <luftreich@gmail.com> 
-狂者進取，狷者有所不為! [Follow ME!](https://twitter.com/Luftreich)
+狂者進取，狷者有所不為! [Follow ME](https://twitter.com/Luftreich)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
