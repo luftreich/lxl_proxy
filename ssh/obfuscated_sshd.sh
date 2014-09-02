@@ -179,9 +179,9 @@ case "$1" in
         stop_sshd
         ;;
     restart)
-        sh $0 stop
+        sh $cur_cmd stop
         sleep 2
-        sh $0 start
+        sh $cur_cmd start
         ;;
     *)
         usage

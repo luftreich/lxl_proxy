@@ -17,5 +17,5 @@ git diff --name-only
 echo -n 'Push To Github ? [Y/n]'
 read LUFT
 test -n "$*" || { echo 'do nothing.'; exit; }
-git commit -a -m $*
+git commit -a -m "$*"
 
