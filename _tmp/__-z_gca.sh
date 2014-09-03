@@ -18,4 +18,6 @@ echo -n 'Push To Github ? [Y/n]'
 read LUFT
 test -n "$*" || { echo 'do nothing.'; exit; }
 git commit -a -m "$*"
+_FILE=ssh/etc/gfw.conf.bak
+[ -f "$_FILE" ] && \cp -vf $_FILE ${_FILE%.bak}
 

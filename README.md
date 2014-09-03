@@ -17,8 +17,8 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
 #### STEP 3 - Configure your own PC network interface
 * Set `gateway` to `$YOUR_GATEWAY_IP`
 * Set 'DNS server to `$YOUR_GATEWAY_IP`
- e.g.  
 ```bash
+ # e.g.  
  # FOR LINUX USER
  ip route replace default via $YOUR_GATEWAY_IP dev eth0
  echo "nameserver $YOUR_GATEWAY_IP" > /etc/resolv.conf
@@ -28,10 +28,11 @@ Done !
 #### TODO LIST
 * DNS server in the VPS 
 * Full L2TP Supported
+* iproute2/ip-rule FWMARK routing policy
 
 
 #### LICENSE
-Copyright (C) 2014 Tony lEE  <luftreich@gmail.com> 
+Copyright (C) 2014 Tony lEE  <luftreich@gmail.com>  
 狂者進取，狷者有所不為! [Follow ME](https://twitter.com/Luftreich)
 
 This program is free software: you can redistribute it and/or modify
