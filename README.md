@@ -1,4 +1,4 @@
-## [Obfuscated SSHD](https://github.com/brl/obfuscated-openssh) Server Deploy
+## [Obfuscated SSHD](https://github.com/brl/obfuscated-openssh) Server [Deploy](http://bullshitlie.blogspot.hk/2012/04/ultimate.html)
 A global proxy server/client/gateway for Linux, written in `SHELL`.
 
 #### PREREQUISITES
@@ -29,6 +29,7 @@ Done !
 * DNS server in the VPS 
 * Full L2TP Supported
 * iproute2/ip-rule FWMARK routing policy
+* Add SSHD `update-rc.d`
 
 
 #### LICENSE
