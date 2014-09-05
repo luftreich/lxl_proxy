@@ -72,7 +72,9 @@ pre_env()
    cd libsodium-* && { ./configure; make; make install; cd -; }
 
    tar xf dnscrypt-proxy-*.tar.bz2
-   cd dnscrypt-proxy-* && { ./configure --host=x86_64-unknown-linux-gnu; make; make install; cd -; }
+   local HOST_OPTS=
+   uname -m | grep 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
+   cd dnscrypt-proxy-* && { ./configure  $HOST_OPTS; make; make install; cd -; }
 
    test -x $DNSCRYPT_PROXY_EXE || { echo_msg "Err: Install dnscrypt-proxy Failed !"; exit 7; }
 }
