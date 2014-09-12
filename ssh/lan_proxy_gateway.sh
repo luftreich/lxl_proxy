@@ -58,10 +58,24 @@ usage()
 _EOF
 }
 
-pre_env()
+pre_geoip_env()
+{
+    local DSTDIR=/usr/share/xt_geoip
+    ls $DSTDIR/[BL]E >/dev/null && return
+
+    apt-get update
+    apt-get -y install libtext-csv-xs-perl xtables-addons-common
+    cd /tmp || exit
+    mkdir -p $DSTDIR
+    /usr/lib/xtables-addons/xt_geoip_dl
+    /usr/lib/xtables-addons/xt_geoip_build -D $DSTDIR GeoIP*.csv
+    sync; sync
+    ls $DSTDIR/[BL]E >/dev/null || { echo_msg "Err: Install GeoIP Failed !"; exit 7; }
+}
+
+pre_dnscrypt_env()
 {
    test -x $DNSCRYPT_PROXY_EXE && return
-   probe_root
    apt-get -y install pdnsd redsocks dnsutils
    
    cd $pkg_dir || exit
@@ -77,6 +91,12 @@ pre_env()
    cd dnscrypt-proxy-* && { ./configure  $HOST_OPTS; make; make install; cd -; }
 
    test -x $DNSCRYPT_PROXY_EXE || { echo_msg "Err: Install dnscrypt-proxy Failed !"; exit 7; }
+}
+
+pre_all_env()
+{
+    pre_geoip_env     || exit
+    pre_dnscrypt_env  || exit
 }
 
 local_socks5_forward()
@@ -254,6 +274,7 @@ clear_iptables_rules()
     iptables -t nat -F
     iptables -t nat -X
     iptables -t nat -Z
+    iptables -t mangle -F
 
     # iptables -t mangle -D POSTROUTING -j TEE --gateway $sniff_host 2>/dev/null
     # iptables -t mangle -D PREROUTING  -j TEE --gateway $sniff_host 2>/dev/null
@@ -277,6 +298,14 @@ clear_iptables_rules()
 
 }
 
+enable_snat()
+{
+    # Only NAT Forward
+    echo "1" > /proc/sys/net/ipv4/ip_forward
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    iptables -t nat --list
+}
+
 gen_iptables_rules()
 {
     ##
@@ -289,43 +318,29 @@ gen_iptables_rules()
     iptables -t nat -A REDSOCKS -d 224.0.0.0/4 -j RETURN
     iptables -t nat -A REDSOCKS -d 240.0.0.0/4 -j RETURN
 
-    # Anti-GFW
-    # iptables -A INPUT -p udp --sport 53 -m state --state ESTABLISHED -m gfw -j DROP -m comment --comment "drop gfw dns hijacks"
-
-    # 如果使用国外代理的话，走 UDP 的 DNS 请求转到 redsocks，redsocks 会让其使用 TCP 重试
-    # iptables -t nat -A REDSOCKS -p udp --dport 53 -j REDIRECT --to-ports 2053
-    # 如果走 TCP 的 DNS 请求也需要代理的话，使用下边这句。一般不需要
-    # iptables -t nat -A REDSOCKS -p tcp --dport 53 -j REDIRECT --to-ports 2053
 
     # Redirect normal HTTP and HTTPS traffic
-    iptables -t nat -A REDSOCKS -p tcp --dport 80 -j REDIRECT --to-ports $redsocks_listen_port
-    iptables -t nat -A REDSOCKS -p tcp --dport 443 -j REDIRECT --to-ports $redsocks_listen_port
+    local _OPTS=
+    echo "$*" | grep -q '\-\-geoip' && _OPTS='-m geoip ! --dst-cc CN'
+    iptables -t nat -A REDSOCKS -p tcp --dport 80  $_OPTS -j REDIRECT --to-ports $redsocks_listen_port
+    iptables -t nat -A REDSOCKS -p tcp --dport 443 $_OPTS -j REDIRECT --to-ports $redsocks_listen_port
 
-    # 重定向全部TCP
+    # 重定向全部TCP,非必需
     # iptables -t nat -A REDSOCKS -p tcp -j REDIRECT --to-ports $redsocks_listen_port
 
     # iptables -t mangle -A POSTROUTING -j TEE --gateway $sniff_host
     # iptables -t mangle -A PREROUTING  -j TEE --gateway $sniff_host
 
-    ##############################################################################
-    # 本地全局代理
+    # 本地,非必需
     # iptables -t nat -A OUTPUT -p tcp -j REDSOCKS
-
-    # 劫持dns查询
-    iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53
+    # 子网
     iptables -t nat -A PREROUTING -p tcp -j REDSOCKS
 
-    # 使能Forward
-    echo "1" > /proc/sys/net/ipv4/ip_forward
-    iptables -t nat --list
-}
+    # 劫持DNS, Anti-GFW
+    iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53
 
-enable_nat()
-{
-    # Only NAT Forward
-    echo "1" > /proc/sys/net/ipv4/ip_forward
-    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-    iptables -t nat --list
+    # 使能SNAT
+    enable_snat
 }
 
 #### main prog
@@ -341,27 +356,27 @@ case $1 in
         ;;
     start)
         probe_root
-        pre_env
+        pre_all_env
         boot_redsocks
         dns_proxy_srv
-        gen_iptables_rules
+        gen_iptables_rules "$*"
         ;;
     stop)
         probe_root
-        pre_env
+        pre_all_env
         clear_iptables_rules
         kill_all_daemon
         ;;
     restart|reload)
         sh $cur_cmd stop
         sleep 2
-        sh $cur_cmd start
+        sh $cur_cmd start --geoip
         ;;
     nat)
         probe_root
         sh $cur_cmd stop
         sleep 3
-        enable_nat
+        enable_snat
         ;;
     *)
         usage
