@@ -40,6 +40,7 @@ export upstream_dns_port='2053'  # 不能与默认udp53端口冲突
 export redsocks_listen_port='54321'
 export sniff_host='192.168.1.125'
 DNSCRYPT_PROXY_EXE='/usr/local/sbin/dnscrypt-proxy'
+lock_file=/tmp/STOP_GW
 
 cd $cur_dir
 . ./init_func.sh
@@ -76,7 +77,7 @@ pre_geoip_env()
 pre_dnscrypt_env()
 {
    test -x $DNSCRYPT_PROXY_EXE && return
-   apt-get -y install pdnsd redsocks dnsutils
+   apt-get -y install pdnsd redsocks dnsutils autossh expect
    
    cd $pkg_dir || exit
    wget -c -t 3 http://download.dnscrypt.org/dnscrypt-proxy/dnscrypt-proxy-1.3.3.tar.bz2
@@ -99,6 +100,12 @@ pre_all_env()
     pre_dnscrypt_env  || exit
 }
 
+stop_socks5_forward()
+{
+    pkill -SIGKILL autossh
+    pkill -SIGKILL ${OBF_SSH##*/}
+}
+
 local_socks5_forward()
 {
     # 本地SOCKS5 FORWARD
@@ -107,7 +114,10 @@ local_socks5_forward()
     cd  $cur_dir || exit
     local _OPTS='-o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
 
-    if echo "$*" | grep -q 'key'; then
+    if echo "$*" | grep -q 'stop'; then
+        stop_socks5_forward
+        return
+    elif echo "$*" | grep -q 'key'; then
         # Pubkeyauthentication
         grep "host ${host_name}" ~/.ssh/config || {
             cat >> ~/.ssh/config << _EOF
@@ -121,10 +131,38 @@ _EOF
 
         [ -f ~/.ssh/${key_file} ] || echo_msg "Warn: private key < ~/.ssh/${key_file} > not exist !"
 
-        $OBF_SSH $_OPTS -C -N -D $forward_port ${host_name} -Z $key_code -v
+ ##       local mon_port=43210 ## monitoring port
+ ##       local i=0
+ ##       {
+ ##           while true; do
+ ##               sleep 5
+ ##               [ -f $lock_file ] && break
+ ##               lsof -i:${mon_port} >/dev/null && continue
+ ##               $OBF_SSH $_OPTS -f \
+ ##                   -L ${mon_port}:127.0.0.1:${mon_port} \
+ ##                   -C -N -D $forward_port \
+ ##                   -Z $key_code -v \
+ ##                   ${host_name}
+ ##               let i+=1
+ ##               echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
+ ##               [ $i -eq 10 ] && break
+ ##           done
+ ##       } &
+
+        EXEC_OBF_SSH=${OBF_SSH}_exec
+        [ -x $EXEC_OBF_SSH ] || {
+            echo -n 'Please Input Root '
+            su -c "> $EXEC_OBF_SSH; chmod 777 $EXEC_OBF_SSH"
+        }
+        echo "exec $OBF_SSH -Z $key_code \"\$@\"" > $EXEC_OBF_SSH; sync
+
+        export AUTOSSH_PATH=$EXEC_OBF_SSH
+        autossh -M 43210 -f -C -N -D $forward_port $host_name
 
         # ssh  -C -N -D $forward_port server -v ## LAN TEST
+
     else
+
         # Passwordauthentication
         login_ssh_exec=./login_socks_host
         cat > $login_ssh_exec << _EOF
@@ -265,6 +303,8 @@ kill_all_daemon()
     pkill pdnsd
     pkill dnscrypt-proxy 
     pkill redsocks
+
+    stop_socks5_forward
 }
 
 clear_iptables_rules()

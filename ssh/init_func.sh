@@ -21,7 +21,7 @@ bld_dir=$pkg_dir/$src_dir
 OBF_SSHD=$bld_dir/obf_sshd
 OBF_SSHD_CONFIG=$bld_dir/sshd_config_obf
 OBF_HOST_KEY=$bld_dir/ssh_host_rsa_key
-OBF_SSH=$bld_dir/ssh
+OBF_SSH=$bld_dir/ssh_obf
 
 probe_root()
 {
@@ -53,6 +53,7 @@ pre_install()
 
         if [ -f ./sshd ]; then
             mv ./sshd $OBF_SSHD
+            mv ./ssh $OBF_SSH
         else
             echo_msg "Err: Install Obfuscated-openssh Failed !"
             exit 65
