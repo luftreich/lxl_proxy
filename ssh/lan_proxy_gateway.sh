@@ -40,7 +40,9 @@ export upstream_dns_port='2053'  # 不能与默认udp53端口冲突
 export redsocks_listen_port='54321'
 export sniff_host='192.168.1.125'
 DNSCRYPT_PROXY_EXE='/usr/local/sbin/dnscrypt-proxy'
-lock_file=/tmp/STOP_GW
+stop_ssh_file=/tmp/stop_ssh
+ssh_pid_file=/tmp/.PID_SSH
+touch $ssh_pid_file
 
 cd $cur_dir
 . ./init_func.sh
@@ -102,8 +104,18 @@ pre_all_env()
 
 stop_socks5_forward()
 {
+    ps -ef | grep 'expec[t]' | awk '{print $2}' | xargs kill -9
     pkill -SIGKILL autossh
     pkill -SIGKILL ${OBF_SSH##*/}
+}
+
+kill_ssh_fork()
+{
+    grep '[0-9]' $ssh_pid_file && {
+        read PID_SSH < $ssh_pid_file
+        kill -9 $PID_SSH
+        >$ssh_pid_file
+    }
 }
 
 local_socks5_forward()
@@ -112,9 +124,22 @@ local_socks5_forward()
 
     pre_install
     cd  $cur_dir || exit
-    local _OPTS='-o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
 
+    EXEC_OBF_SSH=${OBF_SSH}_exec
+    [ -x $EXEC_OBF_SSH ] || {
+        echo -n 'Please Input Root '
+        su -c "> $EXEC_OBF_SSH; chmod 777 $EXEC_OBF_SSH"
+    }
+    echo "exec $OBF_SSH -Z $key_code \"\$@\"" > $EXEC_OBF_SSH; sync
+
+    export AUTOSSH_PATH=$EXEC_OBF_SSH
+    local _OPTS='-o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
+    local mon_port=43210 ## monitoring port
+    local i=0
+
+    # Start
     if echo "$*" | grep -q 'stop'; then
+        kill_ssh_fork
         stop_socks5_forward
         return
     elif echo "$*" | grep -q 'key'; then
@@ -130,34 +155,23 @@ _EOF
         }
 
         [ -f ~/.ssh/${key_file} ] || echo_msg "Warn: private key < ~/.ssh/${key_file} > not exist !"
+        autossh -M $mon_port -f -C -N -D $forward_port $host_name
 
- ##       local mon_port=43210 ## monitoring port
- ##       local i=0
- ##       {
- ##           while true; do
- ##               sleep 5
- ##               [ -f $lock_file ] && break
- ##               lsof -i:${mon_port} >/dev/null && continue
- ##               $OBF_SSH $_OPTS -f \
- ##                   -L ${mon_port}:127.0.0.1:${mon_port} \
- ##                   -C -N -D $forward_port \
- ##                   -Z $key_code -v \
- ##                   ${host_name}
- ##               let i+=1
- ##               echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
- ##               [ $i -eq 10 ] && break
- ##           done
- ##       } &
-
-        EXEC_OBF_SSH=${OBF_SSH}_exec
-        [ -x $EXEC_OBF_SSH ] || {
-            echo -n 'Please Input Root '
-            su -c "> $EXEC_OBF_SSH; chmod 777 $EXEC_OBF_SSH"
-        }
-        echo "exec $OBF_SSH -Z $key_code \"\$@\"" > $EXEC_OBF_SSH; sync
-
-        export AUTOSSH_PATH=$EXEC_OBF_SSH
-        autossh -M 43210 -f -C -N -D $forward_port $host_name
+        # {
+        #     while true; do
+        #         sleep 5
+        #         [ -f $stop_ssh_file ] && break
+        #         lsof -i:${mon_port} >/dev/null && continue
+        #         $OBF_SSH $_OPTS -f \
+        #             -L ${mon_port}:127.0.0.1:${mon_port} \
+        #             -C -N -D $forward_port \
+        #             -Z $key_code -v \
+        #             ${host_name}
+        #         let i+=1
+        #         echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
+        #         [ $i -eq 10 ] && break
+        #     done
+        # } &
 
         # ssh  -C -N -D $forward_port server -v ## LAN TEST
 
@@ -168,11 +182,20 @@ _EOF
         cat > $login_ssh_exec << _EOF
 #!/usr/bin/expect
 
+if {[fork] != 0} exit
+disconnect
+
 set timeout 120
 set host_addr $host_addr
 set gfw_user $gfw_user
 
-spawn -noecho $OBF_SSH $_OPTS  -C -N -D $forward_port $gfw_user@$host_addr -Z $key_code -p $srv_port -v
+# spawn -noecho autossh -M $mon_port -C -N -D $forward_port -p $srv_port -v $gfw_user@$host_addr
+spawn -noecho $OBF_SSH $_OPTS  \
+    -L ${mon_port}:127.0.0.1:${mon_port} \
+    -C -N -D $forward_port \
+    -Z $key_code \
+    -p $srv_port -v \
+    $gfw_user@$host_addr
 
 # expect -re {    # 等待响应，第一次登录往往会提示是否永久保存 RSA 到本机的 know hosts 列表中；等到回答后，在提示输出密码；
 #       "(yes/no)?" {
@@ -187,12 +210,31 @@ spawn -noecho $OBF_SSH $_OPTS  -C -N -D $forward_port $gfw_user@$host_addr -Z $k
 
 expect -re 密码：|Password:|password:
 send "$passwd\r"
-interact
+# interact
+
+expect EOF
+wait
 
 _EOF
 
-    chmod +x $login_ssh_exec
-    $login_ssh_exec
+        >$ssh_pid_file
+        chmod +x $login_ssh_exec
+        {
+            while true; do
+                sleep 10
+                trap 'exit 7' TERM
+                [ -f $stop_ssh_file ] && break
+                lsof -i:${mon_port} >/dev/null && continue
+                stop_socks5_forward
+                sleep 2
+                $login_ssh_exec
+                let i+=1
+                echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
+                [ $i -ge 10 ] && sleep 120
+                [ $i -eq 50 ] && break
+            done
+        } &
+        echo $! >$ssh_pid_file
 
     fi
 
@@ -304,6 +346,7 @@ kill_all_daemon()
     pkill dnscrypt-proxy 
     pkill redsocks
 
+    kill_ssh_fork
     stop_socks5_forward
 }
 

@@ -11,7 +11,7 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
 
 #### STEP 2 - Configure Gateway
 * Copy keyring to GATEWAY, `scp VPS:/$YOUR_DIR/ssh/pkg/*_key.tgz $CUR_DIR/ssh/pkg/*_key.tgz`
-* `sh ssh/lan_proxy_gateway.sh start`
+* `sh ssh/lan_proxy_gateway.sh restart`
 * `sh ssh/lan_proxy_gateway.sh ssh [key]`
 
 #### STEP 3 - Configure your own PC network interface
