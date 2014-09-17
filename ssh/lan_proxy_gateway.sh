@@ -51,14 +51,15 @@ usage()
 {
     cat << _EOF
 
-   Usage: ${0##*/} {start|stop|restart|reload}
+    Usage: ${0##*/} {start|stop|restart|reload}
 
-     ${0##*/} start      # Enable global proxy gateway
-     ${0##*/} ssh        # Start local socks5 forward
-     ${0##*/} ssh key    # PubkeyAuthentication
-     ${0##*/} clear      # Clear iptables rules
+           ${0##*/} start        # Enable global proxy gateway
+
+           ${0##*/} ssh [key]    # Start SSH Tunnel, PubkeyAuthentication
+           ${0##*/} ssh [pass]   # Start SSH Tunnel, PasswordAuthentication
         
 _EOF
+    gen_init_start
 }
 
 pre_geoip_env()
@@ -105,6 +106,8 @@ pre_all_env()
 stop_socks5_forward()
 {
     ps -ef | grep 'expec[t]' | awk '{print $2}' | xargs kill -9
+    sleep 2
+    ps -ef | grep 'expec[t]' | awk '{print $2}' | xargs kill -9
     pkill -SIGKILL autossh
     pkill -SIGKILL ${OBF_SSH##*/}
 }
@@ -114,8 +117,29 @@ kill_ssh_fork()
     grep '[0-9]' $ssh_pid_file && {
         read PID_SSH < $ssh_pid_file
         kill -9 $PID_SSH
+        sleep 2
+        kill -9 $PID_SSH 2>/dev/null
         >$ssh_pid_file
     }
+}
+
+stop_all_ssh()
+{
+    kill_ssh_fork
+    stop_socks5_forward
+}
+
+gen_init_start()
+{
+    cat > $cur_dir/start.sh << _EOF
+#!/bin/bash
+
+sh $cur_cmd restart
+sh $cur_cmd ssh 2>&1 | tee /dev/null
+# sh $cur_cmd ssh key 2>&1 | tee /dev/null
+
+_EOF
+    chmod +x $cur_dir/start.sh
 }
 
 local_socks5_forward()
@@ -133,53 +157,63 @@ local_socks5_forward()
     echo "exec $OBF_SSH -Z $key_code \"\$@\"" > $EXEC_OBF_SSH; sync
 
     export AUTOSSH_PATH=$EXEC_OBF_SSH
-    local _OPTS='-o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
+    local _OPTS='-t -o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
     local mon_port=43210 ## monitoring port
     local i=0
 
-    # Start
-    if echo "$*" | grep -q 'stop'; then
-        kill_ssh_fork
-        stop_socks5_forward
-        return
-    elif echo "$*" | grep -q 'key'; then
-        # Pubkeyauthentication
-        grep "host ${host_name}" ~/.ssh/config || {
-            cat >> ~/.ssh/config << _EOF
+    if [ $# -ne 2 ]; then
+        param='pass'
+    else
+        param=$2
+    fi
+    case $param in
+        st)
+            clear
+            ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]'
+            echo "<FORK_PID> : `cat $ssh_pid_file`"
+            return
+            ;;
+        stop)
+            stop_all_ssh
+            return
+            ;;
+        key)
+            # Pubkeyauthentication
+            grep "host ${host_name}" ~/.ssh/config || {
+                cat >> ~/.ssh/config << _EOF
 host ${host_name}
     user $gfw_user
     hostname $host_addr
     port $srv_port
     identityfile ~/.ssh/${key_file}
 _EOF
-        }
+            }
 
-        [ -f ~/.ssh/${key_file} ] || echo_msg "Warn: private key < ~/.ssh/${key_file} > not exist !"
-        autossh -M $mon_port -f -C -N -D $forward_port $host_name
+            [ -f ~/.ssh/${key_file} ] || echo_msg "Warn: private key < ~/.ssh/${key_file} > not exist !"
+            autossh -M $mon_port -f -C -N -D $forward_port $host_name
 
-        # {
-        #     while true; do
-        #         sleep 5
-        #         [ -f $stop_ssh_file ] && break
-        #         lsof -i:${mon_port} >/dev/null && continue
-        #         $OBF_SSH $_OPTS -f \
-        #             -L ${mon_port}:127.0.0.1:${mon_port} \
-        #             -C -N -D $forward_port \
-        #             -Z $key_code -v \
-        #             ${host_name}
-        #         let i+=1
-        #         echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
-        #         [ $i -eq 10 ] && break
-        #     done
-        # } &
+            # {
+            #     while true; do
+            #         sleep 5
+            #         [ -f $stop_ssh_file ] && break
+            #         lsof -i:${mon_port} >/dev/null && continue
+            #         $OBF_SSH $_OPTS -f \
+            #             -L ${mon_port}:127.0.0.1:${mon_port} \
+            #             -C -N -D $forward_port \
+            #             -Z $key_code -v \
+            #             ${host_name}
+            #         let i+=1
+            #         echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
+            #         [ $i -eq 10 ] && break
+            #     done
+            # } &
 
-        # ssh  -C -N -D $forward_port server -v ## LAN TEST
-
-    else
-
-        # Passwordauthentication
-        login_ssh_exec=./login_socks_host
-        cat > $login_ssh_exec << _EOF
+            # ssh  -C -N -D $forward_port server -v ## LAN TEST
+            ;;
+        pass)
+            # Passwordauthentication
+            login_ssh_exec=./login_socks_host
+            cat > $login_ssh_exec << _EOF
 #!/usr/bin/expect
 
 if {[fork] != 0} exit
@@ -217,27 +251,33 @@ wait
 
 _EOF
 
-        >$ssh_pid_file
-        chmod +x $login_ssh_exec
-        {
-            while true; do
-                sleep 10
+            # >$ssh_pid_file
+            chmod +x $login_ssh_exec
+            {
                 trap 'exit 7' TERM
-                [ -f $stop_ssh_file ] && break
-                lsof -i:${mon_port} >/dev/null && continue
-                stop_socks5_forward
-                sleep 2
-                $login_ssh_exec
-                let i+=1
-                echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
-                [ $i -ge 10 ] && sleep 120
-                [ $i -eq 50 ] && break
-            done
-        } &
-        echo $! >$ssh_pid_file
 
-    fi
-
+                local T=0
+                while true; do
+                    let T+=1
+                    [ $T -eq 20 ] && T=1
+                    sleep `expr $T \* 5`
+                    [ -f $stop_ssh_file ] && break
+                    lsof -i:${mon_port} >/dev/null && continue
+                    # Start
+                    stop_socks5_forward
+                    sleep 2
+                    $login_ssh_exec
+                    let i+=1
+                    echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
+                    [ $i -eq 50 ] && break
+                done
+            } &
+            echo $! >$ssh_pid_file
+            ;;
+        *)
+            exit $?
+            ;;
+    esac
 }
 
 boot_redsocks()
@@ -346,8 +386,7 @@ kill_all_daemon()
     pkill dnscrypt-proxy 
     pkill redsocks
 
-    kill_ssh_fork
-    stop_socks5_forward
+    stop_all_ssh
 }
 
 clear_iptables_rules()
