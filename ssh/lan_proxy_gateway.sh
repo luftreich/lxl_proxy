@@ -40,7 +40,7 @@ export upstream_dns_port='2053'  # 不能与默认udp53端口冲突
 export redsocks_listen_port='54321'
 export sniff_host='192.168.1.125'
 DNSCRYPT_PROXY_EXE='/usr/local/sbin/dnscrypt-proxy'
-stop_ssh_file=/tmp/stop_ssh
+stop_ssh_file=/tmp/.STOP_SSH
 ssh_pid_file=/tmp/.PID_SSH
 touch $ssh_pid_file
 
@@ -60,6 +60,11 @@ usage()
         
 _EOF
     gen_init_start
+}
+
+save_log()
+{
+    echo "`date +%F-%T` <$*>" >> /tmp/.LOG_SSH
 }
 
 pre_geoip_env()
@@ -142,6 +147,27 @@ _EOF
     chmod +x $cur_dir/start.sh
 }
 
+alarm_trigger()
+{
+    save_log "SIGALRM"
+    stop_socks5_forward
+}
+
+timing_reconnect()
+{
+    ## 定时主动发送复位信号，防止出现无效连接, 非必需
+    [ -f /tmp/.LOCK_ALARM ] && return
+    {
+        touch /tmp/.LOCK_ALARM
+        trap 'exit 255' INT TERM KILL QUIT
+        while true; do
+            sleep 7200
+            cat $ssh_pid_file | xargs kill -SIGALRM
+        done
+    } &
+    echo $! >/tmp/.PID_ALARM
+}
+
 local_socks5_forward()
 {
     # 本地SOCKS5 FORWARD
@@ -169,7 +195,7 @@ local_socks5_forward()
     case $param in
         st)
             clear
-            ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]'
+            ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]|slee[p]'
             echo "<FORK_PID> : `cat $ssh_pid_file`"
             return
             ;;
@@ -251,10 +277,11 @@ wait
 
 _EOF
 
-            # >$ssh_pid_file
+            timing_reconnect
             chmod +x $login_ssh_exec
             {
-                trap 'exit 7' TERM
+                # trap 'exit 7' TERM
+                trap 'alarm_trigger' ALRM
 
                 local T=0
                 while true; do
@@ -268,8 +295,11 @@ _EOF
                     sleep 2
                     $login_ssh_exec
                     let i+=1
-                    echo "`date +%F-%T` <$i>" >> /tmp/.log_ssh
-                    [ $i -eq 50 ] && break
+                    save_log "$i"
+                    # [ $i -eq 50 ] && {
+                    #     save_log "EXIT"
+                    #     break
+                    # }
                 done
             } &
             echo $! >$ssh_pid_file
