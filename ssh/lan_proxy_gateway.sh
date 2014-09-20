@@ -163,6 +163,7 @@ timing_reconnect()
         while true; do
             sleep 7200
             cat $ssh_pid_file | xargs kill -SIGALRM
+            # pkill -SIGUSR1 autossh
         done
     } &
     echo $! >/tmp/.PID_ALARM
@@ -186,13 +187,22 @@ local_socks5_forward()
     local _OPTS='-t -o StrictHostKeyChecking=no -o TCPKeepAlive=yes -o ServerAliveInterval=60'
     local mon_port=43210 ## monitoring port
     local i=0
+    local _DEBUG='NO'
 
-    if [ $# -ne 2 ]; then
+    if [ $# -eq 1 ]; then
         param='pass'
     else
         param=$2
+        shift
+        [ $# -ge 2 ] && {
+            [ "$2" = "debug" ] && _DEBUG='YES'
+        }
     fi
     case $param in
+        sig)
+            cat $ssh_pid_file | xargs kill -SIGALRM
+            return
+            ;;
         st)
             clear
             ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]|slee[p]'
@@ -216,7 +226,15 @@ _EOF
             }
 
             [ -f ~/.ssh/${key_file} ] || echo_msg "Warn: private key < ~/.ssh/${key_file} > not exist !"
-            autossh -M $mon_port -f -C -N -D $forward_port $host_name
+            if [ "$_DEBUG" = "YES" ]; then
+                $OBF_SSH $_OPTS  \
+                    -L ${mon_port}:127.0.0.1:${mon_port} \
+                    -C -N -D $forward_port \
+                    -Z $key_code -v \
+                    ${host_name}
+            else
+                autossh -M $mon_port -f -C -N -D $forward_port $host_name
+            fi
 
             # {
             #     while true; do
@@ -277,8 +295,34 @@ wait
 
 _EOF
 
-            timing_reconnect
             chmod +x $login_ssh_exec
+
+            if [ "$_DEBUG" = "YES" ]; then
+                cat > $login_ssh_exec << _EOF
+#!/usr/bin/expect
+
+set timeout 120
+set host_addr $host_addr
+set gfw_user $gfw_user
+
+spawn -noecho $OBF_SSH $_OPTS  \
+    -L ${mon_port}:127.0.0.1:${mon_port} \
+    -C -N -D $forward_port \
+    -Z $key_code \
+    -p $srv_port -v \
+    $gfw_user@$host_addr
+
+expect -re 密码：|Password:|password:
+send "$passwd\r"
+interact
+
+_EOF
+                $login_ssh_exec
+                return
+            fi
+
+            # DAEMON
+            timing_reconnect
             {
                 # trap 'exit 7' TERM
                 trap 'alarm_trigger' ALRM
