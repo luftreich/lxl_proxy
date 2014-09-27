@@ -15,8 +15,8 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
 * `sh ssh/lan_proxy_gateway.sh ssh [key]`
 
 #### STEP 3 - Configure your own PC network interface
-* Set `gateway` to `$YOUR_GATEWAY_IP`
-* Set 'DNS server to `$YOUR_GATEWAY_IP`
+* Set `LAN gateway` to `$YOUR_GATEWAY_IP`
+* Set `DNS server`  to `$YOUR_GATEWAY_IP`
 ```bash
  # e.g.  
  # FOR LINUX USER

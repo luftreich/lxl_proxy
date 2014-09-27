@@ -56,7 +56,8 @@ usage()
            ${0##*/} start        # Enable global proxy gateway
 
            ${0##*/} ssh [key]    # Start SSH Tunnel, PubkeyAuthentication
-           ${0##*/} ssh [pass]   # Start SSH Tunnel, PasswordAuthentication
+           ${0##*/} ssh [pass]   # Start SSH Tunnel, PasswordAuthentication, Default option
+           ${0##*/} ssh [pass|key] debug # DEBUG <-p|-k>
         
 _EOF
     gen_init_start
@@ -85,7 +86,7 @@ pre_geoip_env()
 pre_dnscrypt_env()
 {
    test -x $DNSCRYPT_PROXY_EXE && return
-   apt-get -y install pdnsd redsocks dnsutils autossh expect
+   apt-get -y install pdnsd redsocks dnsutils autossh expect lsof
    
    cd $pkg_dir || exit
    wget -c -t 3 http://download.dnscrypt.org/dnscrypt-proxy/dnscrypt-proxy-1.3.3.tar.bz2
@@ -573,6 +574,12 @@ case $1 in
         sh $cur_cmd stop
         sleep 3
         enable_snat
+        ;;
+    -p|--debug-pass)
+        sh -x $cur_cmd ssh pass debug
+        ;;
+    -k|--debug-key)
+        sh -x $cur_cmd ssh key  debug
         ;;
     *)
         usage
