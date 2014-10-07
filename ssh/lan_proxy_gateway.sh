@@ -86,7 +86,7 @@ pre_geoip_env()
 pre_dnscrypt_env()
 {
    test -x $DNSCRYPT_PROXY_EXE && return
-   apt-get -y install pdnsd redsocks dnsutils autossh expect lsof
+   apt-get -y install pdnsd redsocks dnsutils autossh expect lsof sshpass
    
    cd $pkg_dir || exit
    wget -c -t 3 http://download.dnscrypt.org/dnscrypt-proxy/dnscrypt-proxy-1.3.3.tar.bz2
@@ -115,6 +115,7 @@ stop_socks5_forward()
     sleep 2
     ps -ef | grep 'expec[t]' | awk '{print $2}' | xargs kill -9
     pkill -SIGKILL autossh
+    pkill -SIGKILL sshpass
     pkill -SIGKILL ${OBF_SSH##*/}
 }
 
@@ -259,70 +260,27 @@ _EOF
             # Passwordauthentication
             login_ssh_exec=./login_socks_host
             cat > $login_ssh_exec << _EOF
-#!/usr/bin/expect
-
-if {[fork] != 0} exit
-disconnect
-
-set timeout 120
-set host_addr $host_addr
-set gfw_user $gfw_user
-
-# spawn -noecho autossh -M $mon_port -C -N -D $forward_port -p $srv_port -v $gfw_user@$host_addr
-spawn -noecho $OBF_SSH $_OPTS  \
+#!/bin/sh
+sshpass -p "$passwd" \
+    $OBF_SSH $_OPTS  \
     -L ${mon_port}:127.0.0.1:${mon_port} \
     -C -N -D $forward_port \
     -Z $key_code \
     -p $srv_port -v \
     $gfw_user@$host_addr
-
-# expect -re {    # 等待响应，第一次登录往往会提示是否永久保存 RSA 到本机的 know hosts 列表中；等到回答后，在提示输出密码；
-#       "(yes/no)?" {
-#            send "yes\n"
-#            expect "Password:"
-#            send   "$passwd\n"
-#       }
-#       "Password:"  {
-#           send "$passwd\n"
-#       }
-# }
-
-expect -re 密码：|Password:|password:
-send "$passwd\r"
-# interact
-
-expect EOF
-wait
 
 _EOF
 
             chmod +x $login_ssh_exec
 
             if [ "$_DEBUG" = "YES" ]; then
-                cat > $login_ssh_exec << _EOF
-#!/usr/bin/expect
-
-set timeout 120
-set host_addr $host_addr
-set gfw_user $gfw_user
-
-spawn -noecho $OBF_SSH $_OPTS  \
-    -L ${mon_port}:127.0.0.1:${mon_port} \
-    -C -N -D $forward_port \
-    -Z $key_code \
-    -p $srv_port -v \
-    $gfw_user@$host_addr
-
-expect -re 密码：|Password:|password:
-send "$passwd\r"
-interact
-
-_EOF
                 $login_ssh_exec
                 return
             fi
 
             # DAEMON
+            sed -i 's/\-v/\-f/g' $login_ssh_exec
+            sync
             timing_reconnect
             {
                 # trap 'exit 7' TERM
