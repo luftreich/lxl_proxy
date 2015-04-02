@@ -539,6 +539,10 @@ case $1 in
     -k|--debug-key)
         sh -x $cur_cmd ssh key  debug
         ;;
+    geoip)
+        pre_geoip_env
+        exit 0
+        ;;
     *)
         usage
         exit 1
