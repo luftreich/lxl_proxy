@@ -347,6 +347,7 @@ dns_proxy_srv()
     # DNS加密代理
 
     sed -i 's/START_DAEMON=no/START_DAEMON=yes/g' /etc/default/pdnsd 
+    sed -i 's/START_DAEMON=no/START_DAEMON=yes/g' /usr/share/pdnsd/pdnsd-default
     pdnsd_configfile=/etc/pdnsd.conf
 
     cat > $pdnsd_configfile << _EOF

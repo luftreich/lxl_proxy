@@ -44,7 +44,8 @@ pre_install()
         apt-get -y install libssl-dev
 
         cd $pkg_dir || exit
-        wget -c -O ${src_dir}.zip http://github.com/brl/obfuscated-openssh/archive/master.zip
+        # wget -c -O ${src_dir}.zip http://github.com/brl/obfuscated-openssh/archive/master.zip
+        \rm $src_dir -rf; sync
         unzip ${src_dir}.zip
         cd $src_dir || exit
         ./configure --prefix=/usr/local
