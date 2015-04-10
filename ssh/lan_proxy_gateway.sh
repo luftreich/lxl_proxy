@@ -107,6 +107,7 @@ pre_all_env()
 {
     pre_geoip_env     || exit
     pre_dnscrypt_env  || exit
+    pre_polipo_env    || exit
 }
 
 stop_socks5_forward()
@@ -207,7 +208,7 @@ local_socks5_forward()
             ;;
         st)
             clear
-            ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]|slee[p]'
+            ps -ef | grep --color=auto -H -E 'expec[t]|ss[h]|slee[p]|[d]ns|[p]olipo'
             echo "<FORK_PID> : `cat $ssh_pid_file`"
             return
             ;;
@@ -413,6 +414,7 @@ kill_all_daemon()
     /etc/init.d/dnsmasq stop ; sleep 2
     /etc/init.d/bind9 stop   ; sleep 2
     /etc/init.d/pdnsd stop   ; sleep 2
+    /etc/init.d/polipo stop  ; sleep 2
 
     pkill -SIGHUP dnsmasq
     pkill dnsmasq
@@ -460,6 +462,32 @@ enable_snat()
     echo "1" > /proc/sys/net/ipv4/ip_forward
     iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
     iptables -t nat --list
+}
+
+pre_polipo_env()
+{
+    local confFile=/etc/polipo/config
+    type polipo || {
+        apt-get -y install polipo
+        \cp -f $confFile ${confFile}.bak || true
+        type polipo || exit 65
+    }
+}
+
+boot_polipo()
+{
+
+    local confFile=/etc/polipo/config
+    cat > $confFile << _EOS
+proxyAddress = "0.0.0.0"    # IPv4 only
+proxyPort = 8123
+allowedPorts = 1-65535
+socksParentProxy = "localhost:$forward_port"
+socksProxyType = socks5
+_EOS
+
+    sync
+    /etc/init.d/polipo restart
 }
 
 gen_iptables_rules()
@@ -514,12 +542,13 @@ case $1 in
         probe_root
         pre_all_env
         boot_redsocks
+        boot_polipo
         dns_proxy_srv
         gen_iptables_rules "$*"
         ;;
     stop)
         probe_root
-        pre_all_env
+        # pre_all_env
         clear_iptables_rules
         kill_all_daemon
         ;;
