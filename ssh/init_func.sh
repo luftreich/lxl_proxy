@@ -10,6 +10,7 @@ key_file='gfw'      # private key
 key_code='szmxb'    # obfuscated word
 forward_port='7070' # local forward port
 srv_port='2222'     # host port
+gw_self='no'        # proxy lan GW itself
 
 pkg_dir=$cur_dir/pkg
 etc_dir=$cur_dir/etc
@@ -64,23 +65,23 @@ pre_install()
 
 [ -f $host_config ] || {
     cat > $host_config << _EOF
-#HOST                 #USER       #PASSWORD   #KEY_FILE   #KEY_CODE     #FORWARD_PORT   #SRV_PORT
-#192.168.1.20         usergfw     usergfw     gfwLAN         mxb902        7070            2222
-$host_addr         $gfw_user     $passwd     $key_file         $key_code       $forward_port         $srv_port
+#HOST                 #USER       #PASSWORD   #KEY_FILE   #KEY_CODE     #FORWARD_PORT   #SRV_PORT #GW_SELF
+#192.168.1.20         usergfw     usergfw     gfwLAN         mxb902        7070            2222     no
+$host_addr         $gfw_user     $passwd     $key_file         $key_code      $forward_port      $srv_port    $gw_self
 _EOF
     echo_msg "WARNING: Invalid host addr, please check etc/${host_config##*/}!"
     # exit 65
 }
 
 exec 9<&0 <$host_config
-while read host_addr gfw_user passwd key_file key_code forward_port srv_port; do
+while read host_addr gfw_user passwd key_file key_code forward_port srv_port gw_self; do
     # case "$host_addr" in (""|\#*) continue; ;; esac
     echo $host_addr | grep -q '^\#' || break
 done
 exec 0<&9 9<&-
 
 # echo $host_addr $gfw_user $passwd $key_file $key_code $forward_port $srv_port
-export host_addr gfw_user passwd key_file key_code forward_port srv_port
+export host_addr gfw_user passwd key_file key_code forward_port srv_port gw_self
 export host_name=$key_file
 export key_tar_file=$pkg_dir/${key_file}_key.tgz
 export win32_key_file=${key_file}.win32

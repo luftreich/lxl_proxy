@@ -516,7 +516,7 @@ gen_iptables_rules()
     # iptables -t mangle -A PREROUTING  -j TEE --gateway $sniff_host
 
     # 本地,非必需
-    # iptables -t nat -A OUTPUT -p tcp -j REDSOCKS
+    [ "$gw_self" = "yes" ] && iptables -t nat -A OUTPUT -p tcp -j REDSOCKS
     # 子网
     iptables -t nat -A PREROUTING -p tcp -j REDSOCKS
 
