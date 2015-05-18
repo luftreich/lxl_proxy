@@ -38,7 +38,7 @@ pre_install()
 {
     if [ ! -e $OBF_SSHD ]; then
         probe_root
-        apt-get  update
+        # apt-get  update
         # apt-get -y install gcc
         # apt-get -y install build-essential
         apt-get -y install zlib1g-dev

@@ -6,10 +6,12 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
 * Local LAN gateway
 
 #### Step 1 - Configure VPS
+* `git clone https://github.com/luftreich/lxl_proxy.git -b develop`
 * Edit `ssh/etc/gfw.conf`
 * `sh ssh/obfuscated_sshd.sh start`
 
 #### STEP 2 - Configure Gateway
+* `git clone https://github.com/luftreich/lxl_proxy.git -b develop`
 * Copy keyring to GATEWAY, `scp VPS:/$YOUR_DIR/ssh/pkg/*_key.tgz $CUR_DIR/ssh/pkg/*_key.tgz`
 * `sh ssh/lan_proxy_gateway.sh restart`
 * `sh ssh/lan_proxy_gateway.sh ssh [key]`
@@ -23,7 +25,7 @@ A global proxy server/client/gateway for Linux, written in `SHELL`.
  ip route replace default via $YOUR_GATEWAY_IP dev eth0
  echo "nameserver $YOUR_GATEWAY_IP" > /etc/resolv.conf
 ```
-Done ! 
+Done ! :coffee: or :beer:
 
 #### TODO LIST
 * DNS server in the VPS 
