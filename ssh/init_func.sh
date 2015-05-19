@@ -24,6 +24,10 @@ OBF_SSHD_CONFIG=$bld_dir/sshd_config_obf
 OBF_HOST_KEY=$bld_dir/ssh_host_rsa_key
 OBF_SSH=$bld_dir/ssh_obf
 
+HOST_OPTS=
+uname -m | grep 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
+export HOST_OPTS
+
 probe_root()
 {
     id | grep 'root' >/dev/null 2>&1 || {
@@ -49,7 +53,7 @@ pre_install()
         \rm $src_dir -rf; sync
         unzip ${src_dir}.zip
         cd $src_dir || exit
-        ./configure --prefix=/usr/local
+        ./configure $HOST_OPTS --prefix=/usr/local
         make
         # make install
 

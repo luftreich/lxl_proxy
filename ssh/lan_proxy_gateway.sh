@@ -92,8 +92,8 @@ pre_dnscrypt_env()
    wget -c -t 3 http://download.dnscrypt.org/dnscrypt-proxy/dnscrypt-proxy-1.3.3.tar.bz2
    wget -c -t 3 http://download.libsodium.org/libsodium/releases/libsodium-0.5.0.tar.gz
 
-   local HOST_OPTS=
-   uname -m | grep 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
+   # local HOST_OPTS=
+   # uname -m | grep 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
 
    tar xf libsodium-*.tar.gz
    cd libsodium-* && { ./configure $HOST_OPTS; make; make install; cd -; }
