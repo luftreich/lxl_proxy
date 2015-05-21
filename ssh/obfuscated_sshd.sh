@@ -89,6 +89,7 @@ plonk "$host_addr" -C -N -D $forward_port -ssh -2 -P $srv_port -Z $key_code -l $
 
 _EOF
     unix2dos dli.cmd
+    type 7z > /dev/null || apt-get -y install p7zip-full
     7z a -p'1234' $pkg_dir/anti_gfwin32.7z *
     echo 'Password: 1234'
     sync

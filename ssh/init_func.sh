@@ -25,7 +25,7 @@ OBF_HOST_KEY=$bld_dir/ssh_host_rsa_key
 OBF_SSH=$bld_dir/ssh_obf
 
 HOST_OPTS=
-uname -m | grep 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
+uname -m | grep -q 'x86_64' && HOST_OPTS='--host=x86_64-unknown-linux-gnu'
 export HOST_OPTS
 
 probe_root()
@@ -43,8 +43,7 @@ pre_install()
     if [ ! -e $OBF_SSHD ]; then
         probe_root
         # apt-get  update
-        # apt-get -y install gcc
-        # apt-get -y install build-essential
+        type gcc > /dev/null || apt-get -y install gcc make build-essential
         apt-get -y install zlib1g-dev
         apt-get -y install libssl-dev
 
